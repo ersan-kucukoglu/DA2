@@ -1,0 +1,123 @@
+---
+title: DA2 - Assignment 1
+output: pdf_document
+date: "`r format(Sys.time(), '%d %B %Y')`"
+---
+
+## Ersan Kucukoglu
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r , echo=FALSE, message=FALSE}
+#clear memory
+rm(list=ls())
+
+#import libraries
+library(tidyverse)
+library(modelsummary)
+library(dplyr)
+library(fixest)
+
+#import cps_earnings data
+cps_earnings <- read_csv("https://osf.io/4ay9x/download")
+```
+
+In this assignment, I tried to show the unconditional gender gap and gender gap with education level based on the creation_earnings dataset for engineers in the USA in 2014.
+```{r, echo=FALSE,message=FALSE}
+#rename gender variable and its values
+cps_earnings <- cps_earnings %>% rename(gender=sex)
+
+cps_earnings$gender <- factor(cps_earnings$gender,
+                              levels=c(1,2),
+                              labels=c("male","female"))
+```
+I have done some changes in the gender variable and changed the levels 1 and 2 as the "male" and "female" labels to make it more understandable. After that, I created wage per hour variable by dividing weekly earnings by uhours and took its log(wage_per_hour) to make reasonable comparison. For the engineering occupations, I kept only occupation types with codes between 1320 and 1550. 
+After filtering the occupation, I focused only the BA, MA, and PhD level educations in data set. I only focused employed at work because the other earnings are difficult to measure like self-earning and included those who reported 20 hours or more as their usual weekly time worked. 
+As a result, I have engineers data with 1880 observations which have only BA, MA, and PhD as a highest education level.
+
+```{r, echo=FALSE,message=FALSE}
+#select occupation
+engineers <- cps_earnings %>% filter(occ2012>=1320 & occ2012<=1550)
+                                    
+#filter engineers with education level : PhD, BA, MA
+engineers <- engineers %>% filter(engineers$grade92 %in% c(46,43,44) )
+
+#Create a variable which takes the log wage per hour
+engineers <- engineers %>% 
+  mutate( wage_per_hour = earnwke / uhours) %>%
+  mutate( ln_wage_per_hour = log ( wage_per_hour )) 
+```
+
+ I created descriptive data summary for weekly earnings, hourly earnings and gender variables. Based on the summary table, (available in the appendix) hourly and weekly earnings of male and female engineers data  show a almost symetric distribution since mean and median are very close to each other. When we look at the wage per hour, it is clear that female engineers earned 3.62 USD dollars less than male engineers on averega.  
+
+
+To make a comparison between male and female engineers in terms of education level, I created a bar graph(Education evel based on gender in the Appendix) which shows percentage of the education level based on gender. According to the graph, the vast majority of both male and female engineers have BA degrees.Although the percentage of phd degrees that both genders have is very close, there are 7.6 % more female engineers with MA degrees than male engineers in my sample data.
+
+```{r, echo=FALSE,message=FALSE}
+aux <- engineers %>% select( gender , grade92 ) %>%
+  group_by( gender , grade92 ) %>%
+  summarise(count = n() ) %>%
+  mutate(pct = round(count/sum(count)*100,1))
+
+aux$grade92 <- factor(aux$grade92,
+                      levels = c(43,44,46),
+                      labels = c("BA","MA","PhD"))
+```
+
+- For Regression 1, I used only gender with heteroscedastic SE for unconditional gender gap. Based on regression table , reg1 shows that in this sample female engineers earned around 8.5% less per hour than male engineers on average, where this coefficient is significant with 95% confidence.
+```{r,echo=FALSE,message=FALSE}
+#reg1 : Baseline A: use only gender with heteroscedastic SE
+reg1 <- feols(ln_wage_per_hour~gender,engineers) 
+```
+- Based on reg2, I regressed ln wages on  education level and found that engineers with one level higher education level earn around 12.6% more. It is very significant with more than 99.9% confidence.
+```{r,echo=FALSE,message=FALSE}
+#reg2 : Baseline B: use only grade92 with heteroscedastic SE
+reg2 <- feols(ln_wage_per_hour ~ grade92, engineers)
+```
+- Based on regression table,  reg3 column suggest that when compared engineers of the same education level, female engineers in this sample earn around 9.4 % less than male, on average. Compared with reg1 model the difference of earnings based on gender is bigger , it means that in the sample female have higher level education on average. 
+
+- In the second graph, there is positive correlation between the education level and ln wage per hour.It seems that the association between education and ln wages is linear. 
+```{r,echo=FALSE,message=FALSE}
+#reg3 : Multiple regression with both gender and grade92
+reg3 <- feols( ln_wage_per_hour ~ gender + grade92 , data = engineers , vcov = 'hetero' )
+```
+\pagebreak
+
+### Data Summary Table
+```{r, echo=FALSE,message=FALSE}
+P95 <- function(x){ quantile(x,.95,na.rm=T)}
+datasummary( (earnwke + wage_per_hour )*gender ~ Mean + SD + Min + Max + Median + P95 + N , data = engineers )
+```
+
+### Education Level based on gender
+```{r,echo=FALSE,message=FALSE}
+p1 <- ggplot(aux,aes(x=grade92, y=pct ,fill=gender)) +
+  geom_bar(position="dodge", stat="identity")+
+  labs(x="Highest grade completed", y= "Male- Female Education level (%)")+
+  geom_text( aes(label = paste0(pct,"%"), y = pct + 0.05),
+             position = position_dodge(0.9),
+             vjust = 0, size=3)
+p1
+```
+
+### Regression Table
+```{r, echo=FALSE,message=FALSE}
+#Create a simple summary table for the regressions
+etable(reg1,reg2,reg3)
+```
+
+# Ln(earnings per hour) based on education levels
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+p2<- ggplot(data = engineers, aes(x = grade92, y = ln_wage_per_hour) ) +
+  geom_point() + 
+  geom_smooth(method = "lm", formula = y~x) +
+  scale_y_continuous(limits = c(0, 5.5) ) +
+  labs(x = "Highest Education Level",y = "ln(earnings per hour)")
+p2
+```
+
+
+
+
