@@ -73,7 +73,7 @@ For the logit and probit models' mean marginal differences, in terms of distance
 On average, for one more star, the logit marginal coefficient for stars, from 1 to 3, indicates that a hotel’s likelihood of being highly rated is 15,4% greater, and the probit marginal coefficient it is being highly rated is 16,4 % greater. The results are significant at a 1% significance level. For 3 stars to 5 stars, logit marginal shows that it is the likelihood of being highly rated is 20.3% greater, and the probit marginal coefficient it is being highly rated is 20,1 % greater. The results are significant at 1% significance level. 
 The linear probability model predictions and the logit and probit models have similar predictions. It can be observed that the logit and probit have identical brier scores and almost the same values for pseudo R2 and log-loss. The predicted probability for the three models is shown in the model comparison graph. 
 
-Compared the LPM, logit and probit models, the baseline is the predictions of the LPM that correspond to the 45-degree line. The predicted probabilities from the logit and probit are very close to each other.  The range of predicted values of the logit model is [0.162, 0.985], while for the probit it is [0.159,0.986]. These are narrower than that of the LPM. 
+Compared the LPM, logit and probit models, the baseline is the predictions of the LPM that correspond to the 45-degree line. The predicted probabilities from the logit and probit are very close to each other.  The range of predicted values of the logit model is [0.162, 0.985], while for the probit it is [0.159,0.986].
 
 \pagebreak
 ## Appendix
