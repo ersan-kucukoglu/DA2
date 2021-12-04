@@ -1,0 +1,191 @@
+---
+title: "DA2 - Assignment 2"
+author: "Ersan Kucukoglu"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  pdf_document:
+    fig_caption: yes
+    latex_engine: xelatex
+  html_document:
+    df_print: paged
+fontsize: 9pt
+geometry: margin=1.8cm
+header-includes: |
+  \usepackage{titling}
+  \setlength{\droptitle}{-5em}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r ,echo=FALSE, message=FALSE, warning = FALSE}
+#clear memory
+rm(list=ls())
+
+#import libraries
+library(tidyverse)
+library(dplyr)
+library(fixest)
+library(haven)
+library(data.table)
+library(rms)
+library(lspline)
+library(huxtable)
+library(modelsummary)
+library(pscl)
+library(mfx)
+library(kableExtra)
+library(xtable)
+library(cowplot)
+library(stargazer)
+library(estimatr)
+library(gridExtra)
+
+```
+
+```{r,echo=FALSE, message=FALSE, warning = FALSE}
+#import data
+hotels <- read_csv("https://osf.io/utwjs/download")
+
+#filter on Barcelona 
+barcelona <- hotels %>% 
+  filter(city_actual == 'Barcelona') %>% filter(accommodation_type == 'Hotel') %>%filter(!is.na(distance), !is.na(stars), !is.na(rating))
+
+# create a binary variable: highly_rated=1 if rating ≥ 4, 0 
+barcelona <- barcelona %>% 
+  mutate(highly_rated = ifelse(barcelona$rating >= 4, 1, 0))
+```
+## Introduction
+
+In this assignment, I used the hotels-europe dataset and filtered on a city which is Barcelona. The accommodation type was fixed as 'hotel' and missing values for our variables of interest were filtered out. The filtered data contains 352 observations.I used the hotel user rating to create a binary variable: highly_rated=1 if rating is greater than and equal to 4, 0 otherwise. I examined how high rating is related to the other hotel features in the data. I estimate linear probability, logit, and probit models with distance and stars as explanatory variables.
+
+## Descriptive Statistics
+
+Based on descriptive statistics for the Barcelona sample data. The table above indicates that 73% of the hotels in Barcelona are highly rated. The distribution of the stars is left skewed with an average of 3.49. For the distance, it shows right skewed distribution with an average of 1.18 km.
+
+It can be observed from the graph (Relationship between high rating and stars, distance features)the binary  highly_rated variable is related to distance and stars. I used lowess curves to plot distance and stars against the highly rated variable. 
+
+## Regressions and summary of the models
+
+Linear probability model: The fact that the hotel is 1 km from the city center shows that it has a 2 percent smaller probability of being highly rated, keeping all other variables constant.This is not very significant.On average for the hotels in the stars range from 1 to 3, for one more star, it is 23.6% more likely to get a high rate. When the stars from 3 to 5, it is 18.6% more likely to get a high rate, and results are significant at a 1% significance level. 
+For the logit and probit models' mean marginal differences, in terms of distance, we can observe from the summary of models table that they are  very similar to the LMP model.
+On average, for one more star, the logit marginal coefficient for stars, from 1 to 3, indicates that a hotel’s likelihood of being highly rated is 15,4% greater, and the probit marginal coefficient it is being highly rated is 16,4 % greater. The results are significant at a 1% significance level. For 3 stars to 5 stars, logit marginal shows that it is the likelihood of being highly rated is 20.3% greater, and the probit marginal coefficient it is being highly rated is 20,1 % greater. The results are significant at 1% significance level. 
+The linear probability model predictions and the logit and probit models have similar predictions. It can be observed that the logit and probit have identical brier scores and almost the same values for pseudo R2 and log-loss. The predicted probability for the three models is shown in the model comparison graph. 
+
+Compared the LPM, logit and probit models, the baseline is the predictions of the LPM that correspond to the 45-degree line. The predicted probabilities from the logit and probit are very close to each other.  The range of predicted values of the logit model is [0.162, 0.985], while for the probit it is [0.159,0.986]. These are narrower than that of the LPM. 
+
+\pagebreak
+## Appendix
+
+
+```{r,echo=FALSE, message=FALSE, warning = FALSE}
+#glimpse(barcelona)
+P95 <- function(x){ quantile(x,.95,na.rm=T)}
+
+datasummary(highly_rated + distance + stars ~ mean + Median + Min + Max + P95 + SD + N, data = barcelona,
+             title = 'Descriptive Statistics Table' ) %>% 
+  kableExtra::kable_styling(latex_options = "hold_position")
+  
+```
+
+### Examine how high rating is related to stars and distance
+```{r, echo=F, warning=F, fig.height= 5, fig.width=7, fig.align='center'}
+
+# highly rated ~ stars
+p1 <- ggplot(data = barcelona, aes(x=stars, y=highly_rated)) +
+  geom_smooth(method="loess", formula = y ~ x) +
+  scale_x_continuous(expand = c(0.01,0.01), limits = c(1,5), breaks = seq(0,5,1))+
+  scale_y_continuous(expand = c(0.01,0.01), limits = c(0,1), breaks = seq(0,1,0.1)) +
+  labs(x = "Stars",y = "Probability of highly-rated ") +
+  theme_bw()
+
+# highly rated ~ distance
+p2 <- ggplot(data = barcelona, aes(x=distance, y=highly_rated)) +
+  geom_smooth(method="loess", formula = y ~ x) +
+  scale_x_continuous(expand = c(0.01,0.01), limits = c(0.1,3.5), breaks = seq(0,3.5,1))+
+  scale_y_continuous(expand = c(0.01,0.01), limits = c(0,1), breaks = seq(0,1,0.1)) +
+  labs(x = "Distance to the city center",y = "Probability of highly-rated ") +
+  theme_bw()
+
+grid.arrange(p1, p2, ncol=2)
+```
+
+```{r include=FALSE,message=FALSE, warning = FALSE}
+
+### 1 ) LPM
+
+lpm <- feols( highly_rated ~ distance + lspline(stars, c(3)), data = barcelona , vcov = 'hetero' )
+#prediction
+barcelona$pred_lpm <- predict(lpm)
+print(lpm)
+### 2 ) Logit 
+
+#logit coefficients
+logit <- feglm( highly_rated ~ distance + lspline(stars,c(3)) , data= barcelona, family = binomial( link = "logit" ) )
+#prediction
+barcelona$pred_logit <- predict.glm(logit, type="response")
+#logit marginal differences
+logit_marg <- logitmfx(formula = highly_rated ~ lspline(stars, c(3)) + distance, data=barcelona, atmean=FALSE)
+
+### 3 ) Probit
+
+#probit coefficients
+probit <- feglm( highly_rated ~ distance + lspline(stars,c(3)), data= barcelona, family = binomial( link = "probit" ) )
+#prediction
+barcelona$pred_probit<- predict.glm(probit, type="response") 
+#probit marginal differences
+probit_marg <- probitmfx( highly_rated ~ distance + lspline(stars,c(3)) , data = barcelona, atmean=FALSE, robust = T)
+```
+
+```{r echo=FALSE,message=FALSE, warning = FALSE}
+
+#summary of models
+cm <- c('(Intercept)' = 'Constant')
+msummary(list("LPM" = lpm, "Logit" = logit, "Logit_marginal" = logit_marg, "Probit" =  probit, "Probit_marginal" = probit_marg),
+         fmt="%.3f",
+         gof_omit = 'DF|Deviance|Log.Lik.|F|R2 Adj.|AIC|BIC|R2|PseudoR2',
+         stars=c('*' = .05, '**' = .01),
+         coef_rename = cm,
+         coef_omit = 'as.factor(country)*',
+         title = "Regression Models") %>% 
+        column_spec(1:6, width = "7em") %>%
+        kable_classic(full_width = F, position = "center" , latex_options = "hold_position")
+```
+
+
+```{r, echo=F, warning=F, fig.height= 5, fig.width=5, fig.align='center'}
+p3 <- ggplot(data = barcelona) +
+  geom_point(aes(x=pred_lpm, y=pred_probit, color="Probit"), size=0.5,  shape=16) +
+  geom_point(aes(x=pred_lpm, y=pred_logit,  color="Logit"), size=0.5,  shape=16) +
+  geom_line(aes(x=pred_lpm, y=pred_lpm,    color="45 Degree line"), size=0.5) +
+  labs(title="Model Comparison",x = "Predicted probability of Highly Rated (LPM)", y="Predicted probability")+
+  scale_y_continuous(expand = c(0.00,0.0), limits = c(0,1), breaks = seq(0,1,0.2)) +
+  scale_x_continuous(expand = c(0.00,0.0), limits = c(0,1), breaks = seq(0,1,0.2)) +
+  scale_color_manual(name = "", values=c("#541352FF", "#3a5e8cFF","#10a53dFF")) +
+  theme_light()+
+  theme(legend.position=c(0.55,0.08),
+        legend.direction = "horizontal",
+        legend.text = element_text(size = 10))  
+
+p3 
+#summary(barcelona$pred_logit)
+#summary(barcelona$pred_probit)
+
+```
+*Goodness of fit
+```{r, echo=FALSE,message=FALSE, warning = FALSE}
+fitstat_register("brier", function(x){mean(x$residual^2)}, "Brier score")
+fitstat_register("logloss", function(x){
+  log_id <- !is.na( x$fitted.values ) & x$fitted.values != 1 & x$fitted.values != 0
+  y   <- x$fitted.values[ log_id ] + x$residuals[ log_id ]
+  lp  <- log( x$fitted.values[log_id] )
+  lnp <- log( 1 - x$fitted.values[log_id] )
+  nobs <- sum( log_id )
+  return( 1 / nobs * sum( y * lp + ( 1 - y ) * lnp ) )
+}, "log-loss")
+
+etable( lpm, logit, probit,fitstat = ~ r2 + brier + pr2 + logloss )
+
+```
+
